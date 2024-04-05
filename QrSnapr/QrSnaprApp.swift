@@ -91,7 +91,7 @@ final class AppState: ObservableObject {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString("https://dagpi.xyz/donate", forType: .string)
-        showAlert(message: "Donation link on your clipboard")
+        showAlert(message: "Donation link on your clipboard :)")
         
     }
 }
