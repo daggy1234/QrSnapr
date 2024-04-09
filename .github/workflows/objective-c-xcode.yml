@@ -22,7 +22,7 @@ jobs:
 
       - name: Build
         run: |
-          xcodebuild  clean build ananlyze -scheme QrSnapr -project QrSnapr.xcodeproj -configuration Release
+          xcodebuild  clean build analyze -scheme QrSnapr -project QrSnapr.xcodeproj -configuration Release
 
       - name: Archive App
         run: |
