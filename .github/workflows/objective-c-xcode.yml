@@ -22,7 +22,6 @@ jobs:
 
       - name: Build
         run: |
-          cd build
           xcodebuild  clean build ananlyze -scheme QrSnapr -project QrSnapr.xcodeproj -configuration Release
 
       - name: Archive App
