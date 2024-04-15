@@ -105,7 +105,6 @@ struct SwiftUIMenuBarApp: App {
     var body: some Scene {
         MenuBarExtra("Qr Code Reader", systemImage: "qrcode") {
             Button("Read QR Code", action: appState.readQRCode)
-            Button("Donate", action: appState.donate)
             Divider()
             Button("Shortcuts", action: appState.openSettings)
             Button("Quit", action: quitApp)
