@@ -108,6 +108,7 @@ struct SwiftUIMenuBarApp: App {
             Divider()
             Button("Shortcuts", action: appState.openSettings)
             Button("Quit", action: quitApp)
+            Button("Donate", action: appState.donate)
         }
     }
     
