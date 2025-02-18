@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 56;
+	objectVersion = 77;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -217,7 +217,6 @@
 				};
 			};
 			buildConfigurationList = 106CF5C62B86D08B00AACCBA /* Build configuration list for PBXProject "QrSnapr" */;
-			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -228,6 +227,7 @@
 			packageReferences = (
 				10BC27382BBFA20D003E9EA6 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */,
 			);
+			preferredProjectObjectVersion = 77;
 			productRefGroup = 106CF5CC2B86D08B00AACCBA /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
