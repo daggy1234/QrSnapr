@@ -1,4 +1,4 @@
-name: Xcode - Build and Analyze
+name: Build, Notarize & Release macOS App (Universal)
 
 on:
   push:
@@ -8,11 +8,19 @@ on:
 
 jobs:
   build:
-    name: Build and analyse default scheme using xcodebuild command
-    runs-on: macos-14
-
+    name: Build App for ${{ matrix.arch }}
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            runs_on: macos-12   # Intel runner (adjust if needed)
+            artifact_name: QrSnapr-x86_64
+          - arch: arm64
+            runs_on: macos-14   # Apple Silicon runner
+            artifact_name: QrSnapr-arm64
+    runs-on: ${{ matrix.runs_on }}
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Set up Xcode
@@ -20,17 +28,101 @@ jobs:
         with:
           xcode-version: "latest"
 
-      - name: Build
+      - name: Build App for ${{ matrix.arch }}
         run: |
-          xcodebuild  clean build analyze -scheme QrSnapr -project QrSnapr.xcodeproj -configuration Release
+          # Use a dedicated derived data path so the build products are predictable
+          xcodebuild clean build analyze \
+            -scheme QrSnapr \
+            -project QrSnapr.xcodeproj \
+            -configuration Release \
+            -derivedDataPath build \
+            ARCHS="${{ matrix.arch }}" \
+            ONLY_ACTIVE_ARCH=NO
 
-      - name: Archive App
+      - name: Archive App Build
         run: |
-          cd build
-          zip -r QrSnapr.zip QrSnapr.app
+          # The built .app is assumed to be in build/Build/Products/Release
+          cd build/Build/Products/Release
+          # Create a zip of the .app and output it to the repo root with a unique name
+          zip -r "${GITHUB_WORKSPACE}/${{ matrix.artifact_name }}.zip" QrSnapr.app
 
-      - name: Upload Artifact
+      - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: QrSnapr
-          path: build/QrSnapr.zip
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_name }}.zip
+
+  universal:
+    name: Create Universal App, Notarize & Release
+    needs: build
+    runs-on: macos-14
+    steps:
+      - name: Download x86_64 Artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: QrSnapr-x86_64
+          path: x86
+
+      - name: Download arm64 Artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: QrSnapr-arm64
+          path: arm
+
+      - name: Extract Artifacts
+        run: |
+          unzip -o x86/QrSnapr-x86_64.zip -d x86
+          unzip -o arm/QrSnapr-arm64.zip -d arm
+
+      - name: Merge Binaries into a Universal App
+        run: |
+          # Adjust the path if your executable’s name or location differs.
+          # Here we assume the executable is at QrSnapr.app/Contents/MacOS/QrSnapr.
+          lipo -create \
+            arm/QrSnapr.app/Contents/MacOS/QrSnapr \
+            x86/QrSnapr.app/Contents/MacOS/QrSnapr \
+            -output universal
+          # Replace the arm64 binary with the merged universal binary
+          cp universal arm/QrSnapr.app/Contents/MacOS/QrSnapr
+          # (Optional) Verify the universal binary contains both architectures
+          lipo -info arm/QrSnapr.app/Contents/MacOS/QrSnapr
+          # Package the universal app – zip it and move the zip to the working directory
+          cd arm
+          zip -r QrSnapr-universal.zip QrSnapr.app
+          mv QrSnapr-universal.zip ../
+
+      - name: Notarize the Universal App
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          TEAM_ID: ${{ secrets.TEAM_ID }}
+        run: |
+          # Submit the zipped universal app for notarization and wait until it's complete
+          xcrun notarytool submit QrSnapr-universal.zip \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --team-id "$TEAM_ID" \
+            --wait
+          # Staple the notarization ticket to the app
+          xcrun stapler staple arm/QrSnapr.app
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+
+      - name: Upload Universal App to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: QrSnapr-universal.zip
+          asset_name: QrSnapr-universal.zip
+          asset_content_type: application/zip
