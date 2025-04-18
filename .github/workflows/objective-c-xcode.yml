@@ -1,4 +1,4 @@
-name: Build, Notarize & Release macOS App (Universal)
+name: Build Universal macOS App (No Developer Account Required)
 
 on:
   push:
@@ -32,12 +32,25 @@ jobs:
 
       - name: Build App for ${{ matrix.arch }}
         run: |
+          # Create a temporary xcconfig file to override code signing settings
+          cat > build.xcconfig << EOF
+          CODE_SIGN_IDENTITY = -
+          CODE_SIGN_IDENTITY[sdk=macosx*] = -
+          CODE_SIGNING_REQUIRED = NO
+          CODE_SIGNING_ALLOWED = NO
+          DEVELOPMENT_TEAM =
+          "DEVELOPMENT_TEAM[sdk=macosx*]" =
+          CODE_SIGN_STYLE = Automatic
+          PROVISIONING_PROFILE_SPECIFIER =
+          EOF
+          
           # Use a dedicated derived data path so the build products are predictable
-          xcodebuild clean build analyze \
+          xcodebuild clean build \
             -scheme QrSnapr \
             -project QrSnapr.xcodeproj \
             -configuration Release \
             -derivedDataPath build \
+            -xcconfig build.xcconfig \
             ARCHS="${{ matrix.arch }}" \
             ONLY_ACTIVE_ARCH=NO
 
@@ -93,33 +106,25 @@ jobs:
           zip -r QrSnapr-universal.zip QrSnapr.app
           mv QrSnapr-universal.zip ../
 
-      - name: Notarize the Universal App
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          TEAM_ID: ${{ secrets.TEAM_ID }}
+      - name: Skip Notarization (No Apple Developer Account)
         run: |
-          # Submit the zipped universal app for notarization and wait until it's complete
-          xcrun notarytool submit QrSnapr-universal.zip \
-            --apple-id "$APPLE_ID" \
-            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
-            --team-id "$TEAM_ID" \
-            --wait
-          # Staple the notarization ticket to the app
-          xcrun stapler staple arm/QrSnapr.app
+          echo "Skipping notarization since no Apple Developer account is available."
+          echo "Note: Users will need to use 'right-click > Open' to bypass Gatekeeper warnings."
 
-      - name: Create GitHub Release
+      - name: Create GitHub Release (on tag push only)
         id: create_release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
+          tag_name: ${{ github.ref_name }}
+          release_name: Release ${{ github.ref_name }}
           draft: false
           prerelease: false
 
       - name: Upload Universal App to Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -128,3 +133,9 @@ jobs:
           asset_path: QrSnapr-universal.zip
           asset_name: QrSnapr-universal.zip
           asset_content_type: application/zip
+          
+      - name: Upload Universal App as Workflow Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: QrSnapr-Universal-App
+          path: QrSnapr-universal.zip
