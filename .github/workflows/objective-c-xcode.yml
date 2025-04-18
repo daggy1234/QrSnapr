@@ -57,88 +57,14 @@ jobs:
             ARCHS="${{ matrix.arch }}" \
             ONLY_ACTIVE_ARCH=NO
 
-      - name: Archive App Build
+      - name: Create DMG for ${{ matrix.arch }}
         run: |
-          # The built .app is assumed to be in build/Build/Products/Release
-          cd build/Build/Products/Release
-          # Create a zip of the .app and output it to the repo root with a unique name
-          zip -r "${GITHUB_WORKSPACE}/${{ matrix.artifact_name }}.zip" QrSnapr.app
+          APP_PATH=build/Build/Products/Release/QrSnapr.app
+          dmg_name="${{ matrix.artifact_name }}.dmg"
+          hdiutil create -volname "QrSnapr-${{ matrix.arch }}" -srcfolder "$APP_PATH" -ov -format UDZO "$dmg_name"
 
-      - name: Upload Build Artifact
+      - name: Upload DMG Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
-          path: ${{ matrix.artifact_name }}.zip
-
-  universal:
-    name: Create Universal App, Notarize & Release
-    needs: build
-    runs-on: macos-14
-    steps:
-      - name: Download x86_64 Artifact
-        uses: actions/download-artifact@v3
-        with:
-          name: QrSnapr-x86_64
-          path: x86
-
-      - name: Download arm64 Artifact
-        uses: actions/download-artifact@v3
-        with:
-          name: QrSnapr-arm64
-          path: arm
-
-      - name: Extract Artifacts
-        run: |
-          unzip -o x86/QrSnapr-x86_64.zip -d x86
-          unzip -o arm/QrSnapr-arm64.zip -d arm
-
-      - name: Merge Binaries into a Universal App
-        run: |
-          # Adjust the path if your executable’s name or location differs.
-          # Here we assume the executable is at QrSnapr.app/Contents/MacOS/QrSnapr.
-          lipo -create \
-            arm/QrSnapr.app/Contents/MacOS/QrSnapr \
-            x86/QrSnapr.app/Contents/MacOS/QrSnapr \
-            -output universal
-          # Replace the arm64 binary with the merged universal binary
-          cp universal arm/QrSnapr.app/Contents/MacOS/QrSnapr
-          # (Optional) Verify the universal binary contains both architectures
-          lipo -info arm/QrSnapr.app/Contents/MacOS/QrSnapr
-          # Package the universal app – zip it and move the zip to the working directory
-          cd arm
-          zip -r QrSnapr-universal.zip QrSnapr.app
-          mv QrSnapr-universal.zip ../
-
-      - name: Skip Notarization (No Apple Developer Account)
-        run: |
-          echo "Skipping notarization since no Apple Developer account is available."
-          echo "Note: Users will need to use 'right-click > Open' to bypass Gatekeeper warnings."
-
-      - name: Create GitHub Release (on tag push only)
-        id: create_release
-        # if: startsWith(github.ref, 'refs/tags/')
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref_name }}
-          release_name: Release ${{ github.ref_name }}
-          draft: false
-          prerelease: false
-
-      - name: Upload Universal App to Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: QrSnapr-universal.zip
-          asset_name: QrSnapr-universal.zip
-          asset_content_type: application/zip
-
-      - name: Upload Universal App as Workflow Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: QrSnapr-Universal-App
-          path: QrSnapr-universal.zip
+          path: ${{ matrix.artifact_name }}.dmg
