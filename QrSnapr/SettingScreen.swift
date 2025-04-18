@@ -13,6 +13,7 @@ struct SettingsScreen: View {
     var body: some View {
         Form {
             KeyboardShortcuts.Recorder("QR Code Scanning:", name: .toggleQrDetect)
+            KeyboardShortcuts.Recorder("QR Code Generation:", name: .toggleQrGenerate)
         } .padding()
             .frame(width: 300, height: 100)
             .navigationTitle("Settings")
