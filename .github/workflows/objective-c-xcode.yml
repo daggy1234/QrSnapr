@@ -39,7 +39,7 @@ jobs:
           CODE_SIGNING_REQUIRED = NO
           CODE_SIGNING_ALLOWED = NO
           DEVELOPMENT_TEAM =
-          "DEVELOPMENT_TEAM[sdk=macosx*]" =
+          DEVELOPMENT_TEAM[sdk=macosx*] =
           CODE_SIGN_STYLE = Automatic
           PROVISIONING_PROFILE_SPECIFIER =
           EOF
@@ -113,7 +113,7 @@ jobs:
 
       - name: Create GitHub Release (on tag push only)
         id: create_release
-        if: startsWith(github.ref, 'refs/tags/')
+        # if: startsWith(github.ref, 'refs/tags/')
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
