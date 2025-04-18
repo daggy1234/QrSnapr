@@ -44,6 +44,9 @@ jobs:
           PROVISIONING_PROFILE_SPECIFIER =
           EOF
 
+          # Remove corrupted SwiftPM Package.resolved to avoid malformed file error
+          rm -f QrSnapr.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+
           # Use a dedicated derived data path so the build products are predictable
           xcodebuild clean build \
             -scheme QrSnapr \

@@ -1,103 +1,103 @@
-name: Build macOS App without code signing
+# name: Build macOS App without code signing
 
-on:
-  push:
-    branches: ["main"]
-  pull_request:
-    branches: ["main"]
-  # Allow manual triggering
-  workflow_dispatch:
+# on:
+#   push:
+#     branches: ["main"]
+#   pull_request:
+#     branches: ["main"]
+#   # Allow manual triggering
+#   workflow_dispatch:
 
-jobs:
-  build:
-    name: Build QrSnapr App
-    runs-on: macos-latest
+# jobs:
+#   build:
+#     name: Build QrSnapr App
+#     runs-on: macos-latest
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+#     steps:
+#       - name: Checkout
+#         uses: actions/checkout@v4
 
-      - name: Create temporary project
-        run: |
-          # Create a copy of the project file
-          cp -R QrSnapr.xcodeproj QrSnapr-nosign.xcodeproj
+#       - name: Create temporary project
+#         run: |
+#           # Create a copy of the project file
+#           cp -R QrSnapr.xcodeproj QrSnapr-nosign.xcodeproj
 
-          # Create a patched project file without code signing
-          cat > patch-project.sh << 'EOF'
-          #!/bin/bash
-          sed -i '' 's/CODE_SIGN_IDENTITY = "Developer ID Application";/CODE_SIGN_IDENTITY = "-";/g' QrSnapr-nosign.xcodeproj/project.pbxproj
-          sed -i '' 's/"CODE_SIGN_IDENTITY\[sdk=macosx\*\]" = "Developer ID Application";/"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";/g' QrSnapr-nosign.xcodeproj/project.pbxproj
-          sed -i '' 's/DEVELOPMENT_TEAM = DMH2G7GCK5;/DEVELOPMENT_TEAM = "";/g' QrSnapr-nosign.xcodeproj/project.pbxproj
-          sed -i '' 's/"DEVELOPMENT_TEAM\[sdk=macosx\*\]" = DMH2G7GCK5;/"DEVELOPMENT_TEAM[sdk=macosx*]" = "";/g' QrSnapr-nosign.xcodeproj/project.pbxproj
-          sed -i '' 's/ENABLE_HARDENED_RUNTIME = YES;/ENABLE_HARDENED_RUNTIME = NO;/g' QrSnapr-nosign.xcodeproj/project.pbxproj
-          sed -i '' 's/CODE_SIGN_STYLE = Manual;/CODE_SIGN_STYLE = Automatic;/g' QrSnapr-nosign.xcodeproj/project.pbxproj
-          sed -i '' 's/PROVISIONING_PROFILE_SPECIFIER = "";/PROVISIONING_PROFILE_SPECIFIER = "";/g' QrSnapr-nosign.xcodeproj/project.pbxproj
-          EOF
+#           # Create a patched project file without code signing
+#           cat > patch-project.sh << 'EOF'
+#           #!/bin/bash
+#           sed -i '' 's/CODE_SIGN_IDENTITY = "Developer ID Application";/CODE_SIGN_IDENTITY = "-";/g' QrSnapr-nosign.xcodeproj/project.pbxproj
+#           sed -i '' 's/"CODE_SIGN_IDENTITY\[sdk=macosx\*\]" = "Developer ID Application";/"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";/g' QrSnapr-nosign.xcodeproj/project.pbxproj
+#           sed -i '' 's/DEVELOPMENT_TEAM = DMH2G7GCK5;/DEVELOPMENT_TEAM = "";/g' QrSnapr-nosign.xcodeproj/project.pbxproj
+#           sed -i '' 's/"DEVELOPMENT_TEAM\[sdk=macosx\*\]" = DMH2G7GCK5;/"DEVELOPMENT_TEAM[sdk=macosx*]" = "";/g' QrSnapr-nosign.xcodeproj/project.pbxproj
+#           sed -i '' 's/ENABLE_HARDENED_RUNTIME = YES;/ENABLE_HARDENED_RUNTIME = NO;/g' QrSnapr-nosign.xcodeproj/project.pbxproj
+#           sed -i '' 's/CODE_SIGN_STYLE = Manual;/CODE_SIGN_STYLE = Automatic;/g' QrSnapr-nosign.xcodeproj/project.pbxproj
+#           sed -i '' 's/PROVISIONING_PROFILE_SPECIFIER = "";/PROVISIONING_PROFILE_SPECIFIER = "";/g' QrSnapr-nosign.xcodeproj/project.pbxproj
+#           EOF
 
-          chmod +x patch-project.sh
-          ./patch-project.sh
+#           chmod +x patch-project.sh
+#           ./patch-project.sh
 
-          echo "Patched project file for no code signing"
+#           echo "Patched project file for no code signing"
 
-      - name: Build
-        run: |
-          xcodebuild clean build \
-            -project QrSnapr-nosign.xcodeproj \
-            -scheme QrSnapr \
-            -configuration Release \
-            -derivedDataPath build \
-            CODE_SIGN_IDENTITY="-" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            ENABLE_HARDENED_RUNTIME=NO \
-            DEVELOPMENT_TEAM=""
+#       - name: Build
+#         run: |
+#           xcodebuild clean build \
+#             -project QrSnapr-nosign.xcodeproj \
+#             -scheme QrSnapr \
+#             -configuration Release \
+#             -derivedDataPath build \
+#             CODE_SIGN_IDENTITY="-" \
+#             CODE_SIGNING_REQUIRED=NO \
+#             CODE_SIGNING_ALLOWED=NO \
+#             ENABLE_HARDENED_RUNTIME=NO \
+#             DEVELOPMENT_TEAM=""
 
-          # List build results
-          find build -name "*.app" -type d
+#           # List build results
+#           find build -name "*.app" -type d
 
-      - name: Package App
-        run: |
-          # Find the built app
-          APP_PATH=$(find build -name "QrSnapr.app" -type d | head -n 1)
+#       - name: Package App
+#         run: |
+#           # Find the built app
+#           APP_PATH=$(find build -name "QrSnapr.app" -type d | head -n 1)
 
-          if [ -z "$APP_PATH" ]; then
-            echo "Error: Could not find built QrSnapr.app"
-            find build -type d | grep -i qrsnapr
-            exit 1
-          fi
+#           if [ -z "$APP_PATH" ]; then
+#             echo "Error: Could not find built QrSnapr.app"
+#             find build -type d | grep -i qrsnapr
+#             exit 1
+#           fi
 
-          echo "Found app at: $APP_PATH"
+#           echo "Found app at: $APP_PATH"
 
-          # Create DMG
-          mkdir -p dmg_contents
-          cp -R "$APP_PATH" dmg_contents/
-          hdiutil create -volname "QrSnapr" -srcfolder dmg_contents -ov -format UDZO "QrSnapr.dmg"
+#           # Create DMG
+#           mkdir -p dmg_contents
+#           cp -R "$APP_PATH" dmg_contents/
+#           hdiutil create -volname "QrSnapr" -srcfolder dmg_contents -ov -format UDZO "QrSnapr.dmg"
 
-          # Create zip archive
-          ditto -c -k --keepParent "$APP_PATH" "QrSnapr.zip"
+#           # Create zip archive
+#           ditto -c -k --keepParent "$APP_PATH" "QrSnapr.zip"
 
-      - name: Upload App Bundle
-        uses: actions/upload-artifact@v4
-        with:
-          name: QrSnapr-App
-          path: QrSnapr.zip
+#       - name: Upload App Bundle
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: QrSnapr-App
+#           path: QrSnapr.zip
 
-      - name: Upload DMG
-        uses: actions/upload-artifact@v4
-        with:
-          name: QrSnapr-DMG
-          path: QrSnapr.dmg
+#       - name: Upload DMG
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: QrSnapr-DMG
+#           path: QrSnapr.dmg
 
-      - name: Create Release
-        if: startsWith(github.ref, 'refs/tags/')
-        id: create_release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            QrSnapr.zip
-            QrSnapr.dmg
-          name: Release ${{ github.ref_name }}
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#       - name: Create Release
+#         if: startsWith(github.ref, 'refs/tags/')
+#         id: create_release
+#         uses: softprops/action-gh-release@v1
+#         with:
+#           files: |
+#             QrSnapr.zip
+#             QrSnapr.dmg
+#           name: Release ${{ github.ref_name }}
+#           draft: false
+#           prerelease: false
+#         env:
+#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
