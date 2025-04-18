@@ -1,0 +1,48 @@
+name: Build macOS App
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Xcode
+      uses: maxim-lobanov/setup-xcode@v1
+      with:
+        xcode-version: latest-stable
+    
+    - name: Disable code signing in project.pbxproj
+      run: |
+        # This removes hardcoded code signing requirements directly from the project file
+        sed -i '' 's/CODE_SIGN_IDENTITY = "Developer ID Application";/CODE_SIGN_IDENTITY = "-";/g' QrSnapr.xcodeproj/project.pbxproj
+        sed -i '' 's/"CODE_SIGN_IDENTITY\[sdk=macosx\*\]" = "Developer ID Application";/"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";/g' QrSnapr.xcodeproj/project.pbxproj
+        sed -i '' 's/DEVELOPMENT_TEAM = DMH2G7GCK5;/DEVELOPMENT_TEAM = "";/g' QrSnapr.xcodeproj/project.pbxproj
+        sed -i '' 's/"DEVELOPMENT_TEAM\[sdk=macosx\*\]" = DMH2G7GCK5;/"DEVELOPMENT_TEAM[sdk=macosx*]" = "";/g' QrSnapr.xcodeproj/project.pbxproj
+        sed -i '' 's/CODE_SIGN_STYLE = Manual;/CODE_SIGN_STYLE = Manual; ENABLE_HARDENED_RUNTIME = NO;/g' QrSnapr.xcodeproj/project.pbxproj
+        # Handle app sandbox if needed
+        sed -i '' 's/<true\/>/<false\/>/' QrSnapr/QrSnapr.entitlements
+      
+    - name: Build
+      run: |
+        xcodebuild clean build -project QrSnapr.xcodeproj -scheme QrSnapr -configuration Release \
+          CODE_SIGN_IDENTITY="-" \
+          CODE_SIGN_STYLE="Manual" \
+          CODE_SIGNING_REQUIRED="NO" \
+          CODE_SIGNING_ALLOWED="NO" \
+          DEVELOPMENT_TEAM="" \
+          ENABLE_HARDENED_RUNTIME="NO" \
+          OTHER_CODE_SIGN_FLAGS="--options=runtime"
+          
+    - name: Archive artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: QrSnapr-app
+        path: build/Release/QrSnapr.app
