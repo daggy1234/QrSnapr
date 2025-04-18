@@ -15,7 +15,7 @@ jobs:
       matrix:
         include:
           - arch: x86_64
-            runs_on: macos-12 # Intel runner (adjust if needed)
+            runs_on: macos-13 # Intel runner (adjust if needed)
             artifact_name: QrSnapr-x86_64
           - arch: arm64
             runs_on: macos-14 # Apple Silicon runner
