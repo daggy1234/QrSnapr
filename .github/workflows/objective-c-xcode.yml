@@ -34,32 +34,38 @@ jobs:
         run: |
           # Clean any existing build
           rm -rf build/
-          
+
           # Backup the original project file
           cp QrSnapr.xcodeproj/project.pbxproj QrSnapr.xcodeproj/project.pbxproj.bak
-          
-          # Modify the project file to remove code signing requirements
-          sed -i '' 's/CODE_SIGN_IDENTITY = "Developer ID Application";/CODE_SIGN_IDENTITY = "-";/g' QrSnapr.xcodeproj/project.pbxproj
-          sed -i '' 's/"CODE_SIGN_IDENTITY\[sdk=macosx\*\]" = "Developer ID Application";/"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";/g' QrSnapr.xcodeproj/project.pbxproj
-          sed -i '' 's/DEVELOPMENT_TEAM = DMH2G7GCK5;/DEVELOPMENT_TEAM = "";/g' QrSnapr.xcodeproj/project.pbxproj
-          sed -i '' 's/"DEVELOPMENT_TEAM\[sdk=macosx\*\]" = DMH2G7GCK5;/"DEVELOPMENT_TEAM[sdk=macosx*]" = "";/g' QrSnapr.xcodeproj/project.pbxproj
-          sed -i '' 's/ENABLE_HARDENED_RUNTIME = YES;/ENABLE_HARDENED_RUNTIME = NO;/g' QrSnapr.xcodeproj/project.pbxproj
-          sed -i '' 's/CODE_SIGN_STYLE = Manual;/CODE_SIGN_STYLE = Automatic;/g' QrSnapr.xcodeproj/project.pbxproj
-          
-          # Update entitlements file if it exists to disable sandboxing
-          if [ -f "QrSnapr/QrSnapr.entitlements" ]; then
-            cp QrSnapr/QrSnapr.entitlements QrSnapr/QrSnapr.entitlements.bak
-            sed -i '' 's/<true\/>/<false\/>/g' QrSnapr/QrSnapr.entitlements
-          fi
-          
+
+          # Create a patched project file without code signing
+          cat > patch-project.sh << 'EOF'
+          #!/bin/bash
+          sed -i '' 's/CODE_SIGN_IDENTITY = "Developer ID Application";/CODE_SIGN_IDENTITY = "-";/g' QrSnapr-nosign.xcodeproj/project.pbxproj
+          sed -i '' 's/"CODE_SIGN_IDENTITY\[sdk=macosx\*\]" = "Developer ID Application";/"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";/g' QrSnapr-nosign.xcodeproj/project.pbxproj
+          sed -i '' 's/DEVELOPMENT_TEAM = DMH2G7GCK5;/DEVELOPMENT_TEAM = "";/g' QrSnapr-nosign.xcodeproj/project.pbxproj
+          sed -i '' 's/"DEVELOPMENT_TEAM\[sdk=macosx\*\]" = DMH2G7GCK5;/"DEVELOPMENT_TEAM[sdk=macosx*]" = "";/g' QrSnapr-nosign.xcodeproj/project.pbxproj
+          sed -i '' 's/ENABLE_HARDENED_RUNTIME = YES;/ENABLE_HARDENED_RUNTIME = NO;/g' QrSnapr-nosign.xcodeproj/project.pbxproj
+          sed -i '' 's/CODE_SIGN_STYLE = Manual;/CODE_SIGN_STYLE = Automatic;/g' QrSnapr-nosign.xcodeproj/project.pbxproj
+          sed -i '' 's/PROVISIONING_PROFILE_SPECIFIER = "";/PROVISIONING_PROFILE_SPECIFIER = "";/g' QrSnapr-nosign.xcodeproj/project.pbxproj
+          EOF
+          chmod +x patch-project.sh
+          ./patch-project.sh
+
+          # # Update entitlements file if it exists to disable sandboxing
+          # if [ -f "QrSnapr/QrSnapr.entitlements" ]; then
+          #   cp QrSnapr/QrSnapr.entitlements QrSnapr/QrSnapr.entitlements.bak
+          #   sed -i '' 's/<true\/>/<false\/>/g' QrSnapr/QrSnapr.entitlements
+          # fi
+
           echo "Modified project file for no code signing"
-          
+
       - name: Build App for ${{ matrix.arch }}
         run: |
           # Build with comprehensive code signing disabling flags
           xcodebuild clean build \
             -scheme QrSnapr \
-            -project QrSnapr.xcodeproj \
+            -project QrSnapr-nosig.xcodeproj \
             -configuration Release \
             -derivedDataPath build \
             CODE_SIGN_IDENTITY="-" \
@@ -84,19 +90,19 @@ jobs:
             find build -type d | sort
             exit 1
           fi
-          
+
           echo "Found app at: $APP_PATH"
-          
+
           # Create a directory to contain the app
           mkdir -p archive
-          
+
           # Copy the app to the archive directory
           cp -R "$APP_PATH" archive/
-          
+
           # Create a zip of the .app and output it to the repo root with a unique name
           cd archive
           zip -r "${GITHUB_WORKSPACE}/${{ matrix.artifact_name }}.zip" QrSnapr.app
-          
+
           echo "Created archive at: ${GITHUB_WORKSPACE}/${{ matrix.artifact_name }}.zip"
 
       - name: Upload Build Artifact
@@ -131,7 +137,7 @@ jobs:
         run: |
           echo "ARM directory contents:"
           find arm -type f | sort
-          
+
           echo "X86 directory contents:"
           find x86 -type f | sort
 
@@ -140,7 +146,7 @@ jobs:
           # Find executables with error handling
           ARM_BINARY=$(find arm -path "*/Contents/MacOS/QrSnapr" -type f || echo "")
           X86_BINARY=$(find x86 -path "*/Contents/MacOS/QrSnapr" -type f || echo "")
-          
+
           if [ -z "$ARM_BINARY" ] || [ -z "$X86_BINARY" ]; then
             echo "Error: Could not find binaries automatically"
             echo "Falling back to expected paths"
@@ -155,32 +161,32 @@ jobs:
               exit 1
             fi
           fi
-          
+
           echo "Using ARM binary at: $ARM_BINARY"
           echo "Using x86 binary at: $X86_BINARY"
-          
+
           # Create universal binary
           lipo -create "$ARM_BINARY" "$X86_BINARY" -output universal
-          
+
           # Replace the arm64 binary with the merged universal binary
           cp universal "$ARM_BINARY"
-          
+
           # Verify the universal binary contains both architectures
           lipo -info "$ARM_BINARY"
-          
+
           # Create DMG
           mkdir -p dmg_contents
-          
+
           # Copy the app with universal binary to DMG contents
           APP_DIR=$(dirname $(dirname $(dirname "$ARM_BINARY")))
           echo "App directory: $APP_DIR"
           cp -R "$APP_DIR" dmg_contents/
-          
+
           # Create zip and DMG
           cd arm
           zip -r QrSnapr-universal.zip QrSnapr.app
           mv QrSnapr-universal.zip ../
-          
+
           cd ..
           hdiutil create -volname "QrSnapr" -srcfolder dmg_contents -ov -format UDZO QrSnapr.dmg
 
@@ -206,7 +212,7 @@ jobs:
           asset_path: QrSnapr-universal.zip
           asset_name: QrSnapr-universal.zip
           asset_content_type: application/zip
-          
+
       - name: Upload DMG to Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: actions/upload-release-asset@v1
@@ -217,13 +223,13 @@ jobs:
           asset_path: QrSnapr.dmg
           asset_name: QrSnapr.dmg
           asset_content_type: application/x-apple-diskimage
-          
+
       - name: Upload Universal App as Workflow Artifact
         uses: actions/upload-artifact@v4
         with:
           name: QrSnapr-Universal-App
           path: QrSnapr-universal.zip
-          
+
       - name: Upload DMG as Workflow Artifact
         uses: actions/upload-artifact@v4
         with:
