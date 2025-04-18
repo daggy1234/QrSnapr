@@ -60,6 +60,8 @@ jobs:
       - name: Create DMG for ${{ matrix.arch }}
         run: |
           APP_PATH=build/Build/Products/Release/QrSnapr.app
+          # Apply ad-hoc code signature so Gatekeeper won't mark the app as damaged
+          codesign --force --sign - "$APP_PATH"
           dmg_name="${{ matrix.artifact_name }}.dmg"
           hdiutil create -volname "QrSnapr-${{ matrix.arch }}" -srcfolder "$APP_PATH" -ov -format UDZO "$dmg_name"
 
