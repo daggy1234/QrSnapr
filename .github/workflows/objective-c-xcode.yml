@@ -30,80 +30,36 @@ jobs:
         with:
           xcode-version: "latest"
 
-      - name: Disable code signing in project file
-        run: |
-          # Clean any existing build
-          rm -rf build/
-
-          # Backup the original project file
-          cp QrSnapr.xcodeproj/project.pbxproj QrSnapr.xcodeproj/project.pbxproj.bak
-
-          # Create a patched project file without code signing
-          cat > patch-project.sh << 'EOF'
-          #!/bin/bash
-          sed -i '' 's/CODE_SIGN_IDENTITY = "Developer ID Application";/CODE_SIGN_IDENTITY = "-";/g' QrSnapr-nosign.xcodeproj/project.pbxproj
-          sed -i '' 's/"CODE_SIGN_IDENTITY\[sdk=macosx\*\]" = "Developer ID Application";/"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";/g' QrSnapr-nosign.xcodeproj/project.pbxproj
-          sed -i '' 's/DEVELOPMENT_TEAM = DMH2G7GCK5;/DEVELOPMENT_TEAM = "";/g' QrSnapr-nosign.xcodeproj/project.pbxproj
-          sed -i '' 's/"DEVELOPMENT_TEAM\[sdk=macosx\*\]" = DMH2G7GCK5;/"DEVELOPMENT_TEAM[sdk=macosx*]" = "";/g' QrSnapr-nosign.xcodeproj/project.pbxproj
-          sed -i '' 's/ENABLE_HARDENED_RUNTIME = YES;/ENABLE_HARDENED_RUNTIME = NO;/g' QrSnapr-nosign.xcodeproj/project.pbxproj
-          sed -i '' 's/CODE_SIGN_STYLE = Manual;/CODE_SIGN_STYLE = Automatic;/g' QrSnapr-nosign.xcodeproj/project.pbxproj
-          sed -i '' 's/PROVISIONING_PROFILE_SPECIFIER = "";/PROVISIONING_PROFILE_SPECIFIER = "";/g' QrSnapr-nosign.xcodeproj/project.pbxproj
-          EOF
-          chmod +x patch-project.sh
-          ./patch-project.sh
-
-          # # Update entitlements file if it exists to disable sandboxing
-          # if [ -f "QrSnapr/QrSnapr.entitlements" ]; then
-          #   cp QrSnapr/QrSnapr.entitlements QrSnapr/QrSnapr.entitlements.bak
-          #   sed -i '' 's/<true\/>/<false\/>/g' QrSnapr/QrSnapr.entitlements
-          # fi
-
-          echo "Modified project file for no code signing"
-
       - name: Build App for ${{ matrix.arch }}
         run: |
-          # Build with comprehensive code signing disabling flags
+          # Create a temporary xcconfig file to override code signing settings
+          cat > build.xcconfig << EOF
+          CODE_SIGN_IDENTITY = -
+          CODE_SIGN_IDENTITY[sdk=macosx*] = -
+          CODE_SIGNING_REQUIRED = NO
+          CODE_SIGNING_ALLOWED = NO
+          DEVELOPMENT_TEAM =
+          "DEVELOPMENT_TEAM[sdk=macosx*]" =
+          CODE_SIGN_STYLE = Automatic
+          PROVISIONING_PROFILE_SPECIFIER =
+          EOF
+
+          # Use a dedicated derived data path so the build products are predictable
           xcodebuild clean build \
             -scheme QrSnapr \
-            -project QrSnapr-nosig.xcodeproj \
+            -project QrSnapr.xcodeproj \
             -configuration Release \
             -derivedDataPath build \
-            CODE_SIGN_IDENTITY="-" \
-            CODE_SIGN_STYLE="Automatic" \
-            CODE_SIGNING_REQUIRED="NO" \
-            CODE_SIGNING_ALLOWED="NO" \
-            DEVELOPMENT_TEAM="" \
-            ENABLE_HARDENED_RUNTIME="NO" \
-            OTHER_CODE_SIGN_FLAGS="--options=runtime" \
+            -xcconfig build.xcconfig \
             ARCHS="${{ matrix.arch }}" \
             ONLY_ACTIVE_ARCH=NO
-            
-          # List the build products to confirm success
-          find build -name "*.app" -type d
 
       - name: Archive App Build
         run: |
-          # Find the built app - it should be in the build directory
-          APP_PATH=$(find build -name "QrSnapr.app" -type d)
-          if [ -z "$APP_PATH" ]; then
-            echo "Error: Could not find built QrSnapr.app"
-            find build -type d | sort
-            exit 1
-          fi
-
-          echo "Found app at: $APP_PATH"
-
-          # Create a directory to contain the app
-          mkdir -p archive
-
-          # Copy the app to the archive directory
-          cp -R "$APP_PATH" archive/
-
+          # The built .app is assumed to be in build/Build/Products/Release
+          cd build/Build/Products/Release
           # Create a zip of the .app and output it to the repo root with a unique name
-          cd archive
           zip -r "${GITHUB_WORKSPACE}/${{ matrix.artifact_name }}.zip" QrSnapr.app
-
-          echo "Created archive at: ${GITHUB_WORKSPACE}/${{ matrix.artifact_name }}.zip"
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
@@ -112,7 +68,7 @@ jobs:
           path: ${{ matrix.artifact_name }}.zip
 
   universal:
-    name: Create Universal App & Release
+    name: Create Universal App, Notarize & Release
     needs: build
     runs-on: macos-14
     steps:
@@ -133,62 +89,27 @@ jobs:
           unzip -o x86/QrSnapr-x86_64.zip -d x86
           unzip -o arm/QrSnapr-arm64.zip -d arm
 
-      - name: Debug Directory Structure
-        run: |
-          echo "ARM directory contents:"
-          find arm -type f | sort
-
-          echo "X86 directory contents:"
-          find x86 -type f | sort
-
       - name: Merge Binaries into a Universal App
         run: |
-          # Find executables with error handling
-          ARM_BINARY=$(find arm -path "*/Contents/MacOS/QrSnapr" -type f || echo "")
-          X86_BINARY=$(find x86 -path "*/Contents/MacOS/QrSnapr" -type f || echo "")
-
-          if [ -z "$ARM_BINARY" ] || [ -z "$X86_BINARY" ]; then
-            echo "Error: Could not find binaries automatically"
-            echo "Falling back to expected paths"
-            ARM_BINARY="arm/QrSnapr.app/Contents/MacOS/QrSnapr"
-            X86_BINARY="x86/QrSnapr.app/Contents/MacOS/QrSnapr"
-            
-            # Check if these files exist
-            if [ ! -f "$ARM_BINARY" ] || [ ! -f "$X86_BINARY" ]; then
-              echo "Error: Expected binaries not found"
-              ls -la arm/QrSnapr.app/Contents/MacOS/ || echo "ARM binary directory not found"
-              ls -la x86/QrSnapr.app/Contents/MacOS/ || echo "X86 binary directory not found"
-              exit 1
-            fi
-          fi
-
-          echo "Using ARM binary at: $ARM_BINARY"
-          echo "Using x86 binary at: $X86_BINARY"
-
-          # Create universal binary
-          lipo -create "$ARM_BINARY" "$X86_BINARY" -output universal
-
+          # Adjust the path if your executable’s name or location differs.
+          # Here we assume the executable is at QrSnapr.app/Contents/MacOS/QrSnapr.
+          lipo -create \
+            arm/QrSnapr.app/Contents/MacOS/QrSnapr \
+            x86/QrSnapr.app/Contents/MacOS/QrSnapr \
+            -output universal
           # Replace the arm64 binary with the merged universal binary
-          cp universal "$ARM_BINARY"
-
-          # Verify the universal binary contains both architectures
-          lipo -info "$ARM_BINARY"
-
-          # Create DMG
-          mkdir -p dmg_contents
-
-          # Copy the app with universal binary to DMG contents
-          APP_DIR=$(dirname $(dirname $(dirname "$ARM_BINARY")))
-          echo "App directory: $APP_DIR"
-          cp -R "$APP_DIR" dmg_contents/
-
-          # Create zip and DMG
+          cp universal arm/QrSnapr.app/Contents/MacOS/QrSnapr
+          # (Optional) Verify the universal binary contains both architectures
+          lipo -info arm/QrSnapr.app/Contents/MacOS/QrSnapr
+          # Package the universal app – zip it and move the zip to the working directory
           cd arm
           zip -r QrSnapr-universal.zip QrSnapr.app
           mv QrSnapr-universal.zip ../
 
-          cd ..
-          hdiutil create -volname "QrSnapr" -srcfolder dmg_contents -ov -format UDZO QrSnapr.dmg
+      - name: Skip Notarization (No Apple Developer Account)
+        run: |
+          echo "Skipping notarization since no Apple Developer account is available."
+          echo "Note: Users will need to use 'right-click > Open' to bypass Gatekeeper warnings."
 
       - name: Create GitHub Release (on tag push only)
         id: create_release
@@ -213,25 +134,8 @@ jobs:
           asset_name: QrSnapr-universal.zip
           asset_content_type: application/zip
 
-      - name: Upload DMG to Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: QrSnapr.dmg
-          asset_name: QrSnapr.dmg
-          asset_content_type: application/x-apple-diskimage
-
       - name: Upload Universal App as Workflow Artifact
         uses: actions/upload-artifact@v4
         with:
           name: QrSnapr-Universal-App
           path: QrSnapr-universal.zip
-
-      - name: Upload DMG as Workflow Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: QrSnapr-DMG
-          path: QrSnapr.dmg
