@@ -95,6 +95,8 @@ struct QRCodeGeneratorView: View {
 
 extension AppState {
     func openSettings() {
+        // bring settings window to front
+        NSApp.activate(ignoringOtherApps: true)
         let settingsView = SettingsScreen()
         let hostingController = NSHostingController(rootView: settingsView)
 
@@ -139,6 +141,8 @@ final class AppState: ObservableObject {
     }
 
     func showAlert(message: String) {
+        // activate app to bring alert to front
+        NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
         alert.messageText = message
         alert.alertStyle = .warning
@@ -156,14 +160,24 @@ final class AppState: ObservableObject {
     }
     
     func openQRCodeGenerator() {
-            let generatorView = QRCodeGeneratorView()
-            let hostingController = NSHostingController(rootView: generatorView)
-            let window = NSWindow(contentViewController: hostingController)
-            window.setContentSize(NSSize(width: 320, height: 350))
-            window.center()
-            window.makeKeyAndOrderFront(nil)
-            window.title = "QR Code Generator"
+        // bring generator window to front
+        NSApp.activate(ignoringOtherApps: true)
+        let generatorView = QRCodeGeneratorView()
+        let hostingController = NSHostingController(rootView: generatorView)
+        let window = NSWindow(contentViewController: hostingController)
+        window.setContentSize(NSSize(width: 350, height: 400))
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+        window.title = "QR Code Generator"
+    }
+
+    // new helper to open GitHub issues page
+    func openBugReport() {
+        NSApp.activate(ignoringOtherApps: true)
+        if let url = URL(string: "https://github.com/daggy1234/QrSnapr/issues") {
+            NSWorkspace.shared.open(url)
         }
+    }
 }
 
 @main
@@ -180,6 +194,8 @@ struct SwiftUIMenuBarApp: App {
             Button("Shortcuts", action: appState.openSettings)
             Button("Quit", action: quitApp)
             Button("Donate", action: appState.donate)
+            // report bugs
+            Button("Report a Bug", action: appState.openBugReport)
         }
     }
     
