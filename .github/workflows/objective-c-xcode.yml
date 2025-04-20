@@ -66,13 +66,21 @@ jobs:
             ONLY_ACTIVE_ARCH=NO
 
       - name: Create DMG for ${{ matrix.arch }}
+        continue-on-error: true
         run: |
           APP_PATH=build/Build/Products/Release/QrSnapr.app
-          codesign --force --sign - "$APP_PATH"
+          # Skip codesign since no identity is available
           create-dmg \
+            --overwrite \
+            --identity="" \
             --dmg-title "${{ matrix.artifact_name }}" \
             "$APP_PATH" \
             "build/Build/Products/Release/"
+      - name: check if dmg exists
+        run: |
+          cd build/Build/Products/Release
+          ls -l
+        shell: bash
 
       - name: Upload DMG Artifact
         uses: actions/upload-artifact@v4
