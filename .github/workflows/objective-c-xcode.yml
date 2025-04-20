@@ -70,14 +70,12 @@ jobs:
           APP_PATH=build/Build/Products/Release/QrSnapr.app
           codesign --force --sign - "$APP_PATH"
           create-dmg \
-            --volname "QrSnapr-${{ matrix.arch }}" \
-            --app-drop-link 600 120 \
-            --window-size 800 400 \
+            --dmg-title "${{ matrix.artifact_name }}" \
             "$APP_PATH" \
-            "${{ matrix.artifact_name }}.dmg"
+            "build/Build/Products/Release/"
 
       - name: Upload DMG Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
-          path: ${{ matrix.artifact_name }}.dmg
+          path: build/Build/Products/Release/${{ matrix.artifact_name }}.dmg
