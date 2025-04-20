@@ -81,7 +81,7 @@ jobs:
         run: |
           cd build/Build/Products/Release
           ls
-          mv "*.dmg" "${{ matrix.artifact_name }}.dmg"
+          mv *.dmg "${{ matrix.artifact_name }}.dmg"
           ls
 
       - name: Upload DMG Artifact
