@@ -30,6 +30,14 @@ jobs:
         with:
           xcode-version: "latest"
 
+      - name: Set up Node.js and create-dmg
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+
+      - name: Install create-dmg
+        run: npm install --global create-dmg
+
       - name: Build App for ${{ matrix.arch }}
         run: |
           # Create a temporary xcconfig file to override code signing settings
@@ -60,10 +68,13 @@ jobs:
       - name: Create DMG for ${{ matrix.arch }}
         run: |
           APP_PATH=build/Build/Products/Release/QrSnapr.app
-          # Apply ad-hoc code signature so Gatekeeper won't mark the app as damaged
           codesign --force --sign - "$APP_PATH"
-          dmg_name="${{ matrix.artifact_name }}.dmg"
-          hdiutil create -volname "QrSnapr-${{ matrix.arch }}" -srcfolder "$APP_PATH" -ov -format UDZO "$dmg_name"
+          create-dmg \
+            --volname "QrSnapr-${{ matrix.arch }}" \
+            --app-drop-link 600 120 \
+            --window-size 800 400 \
+            "$APP_PATH" \
+            "${{ matrix.artifact_name }}.dmg"
 
       - name: Upload DMG Artifact
         uses: actions/upload-artifact@v4
