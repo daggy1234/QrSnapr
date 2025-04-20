@@ -80,7 +80,9 @@ jobs:
       - name: Rename DMG to include arch
         run: |
           cd build/Build/Products/Release
+          ls
           mv "*.dmg" "${{ matrix.artifact_name }}.dmg"
+          ls
 
       - name: Upload DMG Artifact
         uses: actions/upload-artifact@v4
