@@ -70,6 +70,7 @@ jobs:
         run: |
           APP_PATH=build/Build/Products/Release/QrSnapr.app
           # Skip codesign since no identity is available
+          codesign --force --sign - "$APP_PATH"
           create-dmg \
             --overwrite \
             --identity="" \
